@@ -1,0 +1,177 @@
+#!/bin/bash
+#coding: utf-8
+
+echo ""
+echo "██████╗ ██╗   ██╗   ███╗   ██╗███████╗ ██████╗  ██████╗ ██╗  ██╗"
+echo "██╔══██╗╚██╗ ██╔╝   ████╗  ██║██╔════╝██╔════╝ ██╔═══██╗╚██╗██╔╝"
+echo "██████╔╝ ╚████╔╝    ██╔██╗ ██║█████╗  ██║  ███╗██║   ██║ ╚███╔╝ "
+echo "██╔══██╗  ╚██╔╝     ██║╚██╗██║██╔══╝  ██║   ██║██║   ██║ ██╔██╗ "
+echo "██████╔╝   ██║      ██║ ╚████║███████╗╚██████╔╝╚██████╔╝██╔╝ ██╗"
+echo "╚═════╝    ╚═╝       ╚═╝  ╚═══╝╚══════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝"
+
+#Colours
+greenColour="\e[0;32m\033[1m"
+endColour="\033[0m\e[0m"
+redColour="\e[0;31m\033[1m"
+blueColour="\e[0;34m\033[1m"
+yellowColour="\e[0;33m\033[1m"
+purpleColour="\e[0;35m\033[1m"
+turquoiseColour="\e[0;36m\033[1m"
+grayColour="\e[0;37m\033[1m"
+
+trap ctrl_c INT
+
+function ctrl_c(){
+	echo -e "\n${redColour}[!]Exiting...\n${endColour}"
+	exit 1
+}
+
+# Check root user
+
+if [[ $(id -u) -ne 0 ]]; then
+	echo -e "${redColour}[!] You must be root to execute the script${endColour}"
+	exit 1
+fi
+
+function usagePannel(){
+
+	# Display Help
+   	echo
+   	echo -e "\n${greenColour}Sintaxis: ./vhosts${endColour}"
+   	echo -e "\nOpciones:\n"
+	echo -e "\t[-l] availables     List active domains"
+   	echo -e "\t[-d] example.conf   Disable active domains"
+   	echo -e "\t[-v] create_domain  Create virtual host"
+   	echo -e "\t[-i] dependences    Install dependences"
+	echo -e "\t[-h]                Show help panel"
+   	echo
+	exit 0
+
+}
+
+function enabledDomain(){
+
+	echo -e "\n${turquoiseColour}[!] Configuration files actives${endColour}\n"
+        echo "$(ls /etc/apache2/sites-enabled)"
+	echo ""
+	exit 1
+}
+
+function createDomain(){
+
+	echo -e "${blueColour}\nEnter name for config file (test):${endColour} \n"
+	read nombre
+	if [[ -d /var/www/$nombre ]]; then
+		echo -e "\n${redColour}[!] $nombre already exists${endColour}\n"
+		exit 1
+	fi
+        cp /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/$nombre.conf
+	mkdir /var/www/$nombre
+	chown -R 755 /var/www
+	chown -R www-data:www-data /var/www/$nombre
+	a2dissite 000-default.conf &>/dev/null
+	sudo systemctl reload apache2 &>/dev/null
+        echo -e "\n${blueColour}Enter the domain to create (www.test.com)?${endColour} \n"
+	read domain
+        cat /etc/apache2/sites-available/$nombre.conf | grep -i "servername" | tr -d "#" &>/dev/null
+        sed -i "s/www.example.com/${domain}/g" /etc/apache2/sites-available/$nombre.conf
+        sed -i 's/#ServerName/ServerName/g' /etc/apache2/sites-available/$nombre.conf
+        sed -i "s/html/${nombre}/g" /etc/apache2/sites-available/$nombre.conf
+	sudo a2ensite $nombre.conf &>/dev/null
+	echo "My $domain is working" > /var/www/$nombre/index.html
+	echo -e "\n${blueColour}Enter the IP Address of server:${endColour} \n"
+	read ip
+	sudo sed "3 a $ip $domain" -i /etc/hosts
+	sudo systemctl start apache2 &>/dev/null
+	echo -e "\n${greenColour}[*] Added domain $domain to /etc/hosts\n${endColour}"
+	echo -e "\n${greenColour}[*] Virtualhosting completed\n${endColour}"
+
+	read -p "Want to create SSL for your domain? (Y/N) " res
+	if [[ $res == "Y" ]] || [[ $res == "y" ]]; then
+		echo -e "\n${greenColour}Configuring SSL on domain $domain...${endColour}\n"
+		cp /etc/apache2/sites-available/default-ssl.conf /etc/apache2/sites-available/$nombre-ssl.conf
+                sed -i "s/html/${nombre}/g" /etc/apache2/sites-available/$nombre-ssl.conf
+		echo -e "\n${greenColour}[+] Generating certificate and private key...${endColour}\n"
+		sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/$nombre.key -out /etc/ssl/certs/$nombre.crt
+		sed -i "s/ssl-cert-snakeoil.pem/${nombre}.crt/g" /etc/apache2/sites-available/$nombre-ssl.conf
+		sed -i "s/ssl-cert-snakeoil.key/${nombre}.key/g" /etc/apache2/sites-available/$nombre-ssl.conf
+		a2ensite $nombre-ssl &>/dev/null
+		a2enmod ssl &>/dev/null
+		sudo systemctl reload apache2 &>/dev/null
+		echo -e "\n${greenColour}[+] Your site $domain is already configured with SSL${endColour}\n"
+
+	else
+		exit 1
+	fi
+	read -p "Want to configure ProFTP Server? (Y/N) " ftp
+	if [[ $ftp == "Y" ]] || [[ $ftp == "y" ]]; then
+		echo -e "\n${greenColour} Configuring PROFTP....${endColour}\n"
+		read -p "Enter the name to the FTP user: " user
+		useradd $user -m -d /var/www/$nombre
+		passwd $user
+		sed -i 's/#RequireValidShell/RequireValidShell/g' /etc/proftpd/proftpd.conf
+		echo -e "\n${greenColour}[+] The user $user can access to FTP Server${endColour}\n"
+	else
+		exit 1
+	fi
+}
+
+function deleteDomain(){
+	echo "Disabling Domain $2..."
+	sudo a2dissite $domain &>/dev/null
+	exit 1
+}
+
+
+# Apache2 option
+function optionApache(){
+
+	which apache2 &>/dev/null
+
+	if [[ $? -ne 0 ]]; then
+		echo -e "\n[*] Installing necessary dependences...\n"
+		sudo apt install apache2 -y &>/dev/null
+		sudo apt install openssl -y &>/dev/null
+		sudo apt install proftpd -y &>/dev/null
+		echo -e "\n${greenColour}[*] Dependences installed correctly${endColour}\n"
+		exit 0
+	else
+		echo -e "\n${greenColour}[*] Dependences are already installed${endColour}\n"
+	fi
+}
+
+# Install dependences
+function installDependences(){
+        read -p "Want to install dependences (Y/N) ? " server
+
+        if [[ $server == "Y"  ]] || [[ $server == "y" ]]; then
+                optionApache
+        else
+		exit 1
+	fi
+
+}
+
+
+while getopts ":l:d:v:i:h" arg; do
+	case $arg in
+		l) enabledDomain;;
+		d) domain=$OPTARG;;
+		v) createDomain;;
+		h) usagePannel;;
+		i) installDependences;;
+		?) echo -e "\n${redColour}[!] Invalid Option: -$OPTARG${endColour}\n" >&2; exit 1;;
+		:) echo -e "\n${redColour}[!] Error: -$OPTARG require an argument${endColour}" >&2; exit 1;;
+	esac
+done
+
+# Check if exist arguments
+if [ $# -eq 0 ]; then
+	usagePannel
+fi
+
+
+# Delete domain
+if [[ $2 == $domain  ]]; then
+	deleteDomain
+fi
