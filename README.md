@@ -1,7 +1,7 @@
-# VirtualHosts-Apache2
+# VirtualHosts Apache2
 Apache2 automatic configuration with SSL and proFTP Server Deploy
 
-⚡ APACHE2 VIRTUALHOSTS + SSL + PROFTP AUTOMATION
+⚡ APACHE2 VIRTUALHOSTS + SSL + ProFTP AUTOMATION
 
 📄 I'm openned to listen new ideas to improve the code
 
