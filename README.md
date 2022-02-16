@@ -7,7 +7,7 @@ Apache2 automatic configuration with SSL and proFTP Server Deploy
 
 📝 USAGE:
 
-- git clone https://github.com/n3gox/VirtualHosts-Apache2.git
-- cd VirtualHosts-Apache2
-- chmod +x vhosts
-- ./vhosts -h
+    - git clone https://github.com/n3gox/VirtualHosts-Apache2.git
+    - cd VirtualHosts-Apache2
+    - chmod +x vhosts
+    - ./vhosts -h
